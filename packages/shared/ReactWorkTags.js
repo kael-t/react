@@ -1,4 +1,6 @@
 /**
+ * 标识React的工作标签
+ *
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the

@@ -366,14 +366,19 @@ export function renderWithHooks(
       ReactCurrentDispatcher.current = HooksDispatcherOnMountInDEV;
     }
   } else {
+    // 确定当前的Dispatcher(首次渲染是OnMount, 更新呢是OnnUpdate)
     ReactCurrentDispatcher.current =
       nextCurrentHook === null
         ? HooksDispatcherOnMount
         : HooksDispatcherOnUpdate;
   }
 
+  // 调用函数组件
   let children = Component(props, refOrContext);
 
+  // 在render阶段更新, 会重复调用函数组件
+  // 这时会对update(State/Ref/Effect)等方法产生影响(nextCurrentHook和currentHook,
+  // nextWorkInProgressHook和workInProgressHook等值都不为空)
   if (didScheduleRenderPhaseUpdate) {
     do {
       didScheduleRenderPhaseUpdate = false;
@@ -423,6 +428,9 @@ export function renderWithHooks(
   const didRenderTooFewHooks =
     currentHook !== null && currentHook.next !== null;
 
+  // 渲染完毕了, 把相关的一些动态属性都置空
+  // 过期时间、当前渲染的fiber、老fiber的hook、下一个老fiber的hook
+  // 当前协调中的fiber的hook
   renderExpirationTime = NoWork;
   currentlyRenderingFiber = null;
 
@@ -503,20 +511,30 @@ export function resetHooks(): void {
 
 function mountWorkInProgressHook(): Hook {
   const hook: Hook = {
+    // 在不同的hook中保存的内容不同
+    // useState: state的信息
+    // useEffect: effect对象
+    // useMemo: [缓存的值, deps]
+    // useRef: ref对象
     memoizedState: null,
 
+    // useState和useReducer中,一次更新中 ，产生的最新state值。
     baseState: null,
+    // 保存待更新队列 pendingQueue ，更新函数 dispatch 等信息。
     queue: null,
+    // useState和useReducer中 保存最新的更新队列
     baseUpdate: null,
-
+    // 指向下一个hook对象
     next: null,
   };
 
   if (workInProgressHook === null) {
     // This is the first hook in the list
+    // hook链表头
     firstWorkInProgressHook = workInProgressHook = hook;
   } else {
     // Append to the end of the list
+    // 添加新的hook到链表最后
     workInProgressHook = workInProgressHook.next = hook;
   }
   return workInProgressHook;
@@ -528,8 +546,13 @@ function updateWorkInProgressHook(): Hook {
   // clone, or a work-in-progress hook from a previous render pass that we can
   // use as a base. When we reach the end of the base list, we must switch to
   // the dispatcher used for mounts.
+
+  // nextWorkInProgressHook存在
+  // 说明在一次渲染阶段里面, hook执行了多次
+  // 也就是说functionComponent执行了多次(由于高优任务插入打断了渲染)
   if (nextWorkInProgressHook !== null) {
     // There's already a work-in-progress. Reuse it.
+    // 直接覆盖当前的workInProgressHook, 采用最新的
     workInProgressHook = nextWorkInProgressHook;
     nextWorkInProgressHook = workInProgressHook.next;
 
@@ -543,6 +566,7 @@ function updateWorkInProgressHook(): Hook {
     );
     currentHook = nextCurrentHook;
 
+    // 从currentHook复制一份出来, 生成一个新的Hook对象
     const newHook: Hook = {
       memoizedState: currentHook.memoizedState,
 
@@ -553,6 +577,7 @@ function updateWorkInProgressHook(): Hook {
       next: null,
     };
 
+    // TODO: T: 第一个hook, render阶段结束会重置workInProgressHook
     if (workInProgressHook === null) {
       // This is the first hook in the list.
       workInProgressHook = firstWorkInProgressHook = newHook;
@@ -617,6 +642,7 @@ function updateReducer<S, I, A>(
 
   queue.lastRenderedReducer = reducer;
 
+  // 如果是重复的render阶段(re-render), 则用新的work-in-progress hook去替换掉旧的
   if (numberOfReRenders > 0) {
     // This is a re-render. Apply the new render phase updates to the previous
     // work-in-progress hook.
@@ -624,6 +650,7 @@ function updateReducer<S, I, A>(
     if (renderPhaseUpdates !== null) {
       // Render phase updates are stored in a map of queue -> linked list
       const firstRenderPhaseUpdate = renderPhaseUpdates.get(queue);
+      // 第一次渲染阶段的更新, 说明之前没有更新过, 则全部action一次执行一次
       if (firstRenderPhaseUpdate !== undefined) {
         renderPhaseUpdates.delete(queue);
         let newState = hook.memoizedState;
@@ -643,6 +670,13 @@ function updateReducer<S, I, A>(
           markWorkInProgressReceivedUpdate();
         }
 
+        // 触发了多次更新的话, 不记录中间值, 只记录最后的值
+        // TODO: T: 比如说如下
+        // const [count, setCount] = useState(0);
+        // setCount(1);
+        // setCount(2);
+        // setCount(3);
+        // 只有最后的3会被记录在hook里面
         hook.memoizedState = newState;
         // Don't persist the state accumlated from the render phase updates to
         // the base state unless the queue is empty.
@@ -657,6 +691,7 @@ function updateReducer<S, I, A>(
         return [newState, dispatch];
       }
     }
+    // 返回最终的结果
     return [hook.memoizedState, dispatch];
   }
 
@@ -667,6 +702,7 @@ function updateReducer<S, I, A>(
   const baseState = hook.baseState;
 
   // Find the first unprocessed update.
+  // 找到第一个未处理的update
   let first;
   if (baseUpdate !== null) {
     if (last !== null) {
@@ -688,10 +724,13 @@ function updateReducer<S, I, A>(
     let didSkip = false;
     do {
       const updateExpirationTime = update.expirationTime;
+      // 优先级不足, 跳过当前的这个更新
       if (updateExpirationTime < renderExpirationTime) {
         // Priority is insufficient. Skip this update. If this is the first
         // skipped update, the previous update/state is the new base
         // update/state.
+        // 如果之前未曾跳过, 也就是说这是第一个优先级不足的update
+        // 则这个update的前一个update就是newBaseUpdate和newBaseState
         if (!didSkip) {
           didSkip = true;
           newBaseUpdate = prevUpdate;
@@ -702,12 +741,16 @@ function updateReducer<S, I, A>(
           remainingExpirationTime = updateExpirationTime;
         }
       } else {
+        // 优先级够的update, 则执行这个update
+
         // Process this update.
+        // 如果新旧的的reducer是同一个, 则直接复用之前的state
         if (update.eagerReducer === reducer) {
           // If this update was processed eagerly, and its reducer matches the
           // current reducer, we can use the eagerly computed state.
           newState = ((update.eagerState: any): S);
         } else {
+          // 否则计算出最新的state
           const action = update.action;
           newState = reducer(newState, action);
         }
@@ -716,6 +759,7 @@ function updateReducer<S, I, A>(
       update = update.next;
     } while (update !== null && update !== first);
 
+    // 没有优先级不足的update的话, 更新newBaseUpdate和newBaseState
     if (!didSkip) {
       newBaseUpdate = prevUpdate;
       newBaseState = newState;
@@ -748,9 +792,9 @@ function mountState<S>(
   hook.memoizedState = hook.baseState = initialState;
   const queue = (hook.queue = {
     last: null,
-    dispatch: null,
-    lastRenderedReducer: basicStateReducer,
-    lastRenderedState: (initialState: any),
+    dispatch: null, // 负责更新函数
+    lastRenderedReducer: basicStateReducer, // 用于得到最新的 state ,
+    lastRenderedState: (initialState: any), // 最后一次得到的 state
   });
   const dispatch: Dispatch<
     BasicStateAction<S>,
@@ -778,10 +822,12 @@ function pushEffect(tag, create, destroy, deps) {
     // Circular
     next: (null: any),
   };
+  // 第一个useEffect
   if (componentUpdateQueue === null) {
     componentUpdateQueue = createFunctionComponentUpdateQueue();
     componentUpdateQueue.lastEffect = effect.next = effect;
   } else {
+    // 前面已经存在useEffect
     const lastEffect = componentUpdateQueue.lastEffect;
     if (lastEffect === null) {
       componentUpdateQueue.lastEffect = effect.next = effect;
@@ -801,6 +847,8 @@ function mountRef<T>(initialValue: T): {current: T} {
   if (__DEV__) {
     Object.seal(ref);
   }
+  // 直接把ref挂在到链表上, 所以改动直接在引用上改动
+  // 可以直接取到最新值
   hook.memoizedState = ref;
   return ref;
 }
@@ -1020,11 +1068,13 @@ function updateMemo<T>(
     // Assume these are defined. If they're not, areHookInputsEqual will warn.
     if (nextDeps !== null) {
       const prevDeps: Array<mixed> | null = prevState[1];
+      // 如果前后deps的值相同, 则直接复用上次的state
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         return prevState[0];
       }
     }
   }
+  // 计算新的值, 赋值给memoizedState;
   const nextValue = nextCreate();
   hook.memoizedState = [nextValue, nextDeps];
   return nextValue;
@@ -1071,6 +1121,8 @@ function dispatchAction<S, A>(
     // This is a render phase update. Stash it in a lazily-created map of
     // queue -> linked list of updates. After this render pass, we'll restart
     // and apply the stashed updates on top of the work-in-progress hook.
+
+    // 如果这次更新在渲染阶段的话,
     didScheduleRenderPhaseUpdate = true;
     const update: Update<S, A> = {
       expirationTime: renderExpirationTime,
@@ -1083,6 +1135,7 @@ function dispatchAction<S, A>(
       renderPhaseUpdates = new Map();
     }
     const firstRenderPhaseUpdate = renderPhaseUpdates.get(queue);
+    // 链表头不存在的话则新建, 否则加到链表的末尾
     if (firstRenderPhaseUpdate === undefined) {
       renderPhaseUpdates.set(queue, update);
     } else {
@@ -1094,6 +1147,9 @@ function dispatchAction<S, A>(
       lastRenderPhaseUpdate.next = update;
     }
   } else {
+    // 不在渲染阶段
+
+    // 清空effect
     flushPassiveEffects();
 
     const currentTime = requestCurrentTime();
@@ -1108,9 +1164,12 @@ function dispatchAction<S, A>(
     };
 
     // Append the update to the end of the list.
+    // 获取更新队列的最后一个元素
     const last = queue.last;
     if (last === null) {
       // This is the first update. Create a circular list.
+      // TODO: T:思考下为什么是环形链表
+      // 创建环形链表
       update.next = update;
     } else {
       const first = last.next;
@@ -1129,6 +1188,8 @@ function dispatchAction<S, A>(
       // The queue is currently empty, which means we can eagerly compute the
       // next state before entering the render phase. If the new state is the
       // same as the current state, we may be able to bail out entirely.
+
+      // 当前函数组件对应fiber没有处于调和渲染阶段 ，那么获取最新state , 执行更新
       const lastRenderedReducer = queue.lastRenderedReducer;
       if (lastRenderedReducer !== null) {
         let prevDispatcher;
@@ -1138,6 +1199,10 @@ function dispatchAction<S, A>(
         }
         try {
           const currentState: S = (queue.lastRenderedState: any);
+          // 计算出新的state, 缓存更新方法
+          // 如果发现新的state和当前的state结果一样的话(浅比较), 直接return
+          // 即不走scheduleWork方法, 不进入调度
+          // 所以如果setXXX的值前后是一样的话, 不会进入渲染阶段
           const eagerState = lastRenderedReducer(currentState, action);
           // Stash the eagerly computed state, and the reducer used to compute
           // it, on the update object. If the reducer hasn't changed by the

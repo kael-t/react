@@ -11,9 +11,12 @@ import invariant from 'shared/invariant';
 const randomKey = Math.random()
   .toString(36)
   .slice(2);
+// react内部实例的标识
 const internalInstanceKey = '__reactInternalInstance$' + randomKey;
+// react内部事件处理器标识
 const internalEventHandlersKey = '__reactEventHandlers$' + randomKey;
 
+// 将DOM元素标识为内部实例 TODO: T: 在哪里调用这个函数打的标识?
 export function precacheFiberNode(hostInst, node) {
   node[internalInstanceKey] = hostInst;
 }
@@ -49,6 +52,8 @@ export function getClosestInstanceFromNode(node) {
 /**
  * Given a DOM node, return the ReactDOMComponent or ReactDOMTextComponent
  * instance, or null if the node was not rendered by this React.
+ *
+ * 给定一个DOM元素, 获取这个DOM元素对应的React Fiber节点
  */
 export function getInstanceFromNode(node) {
   const inst = node[internalInstanceKey];

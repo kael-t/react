@@ -9,6 +9,7 @@
 
 /**
  * HTML nodeType values that represent the type of the node
+ * HTML的nodeType, 这里与原本的HTML nodeType是一致的
  */
 
 export const ELEMENT_NODE = 1;

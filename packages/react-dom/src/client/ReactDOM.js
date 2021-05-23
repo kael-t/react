@@ -80,11 +80,13 @@ import {ROOT_ATTRIBUTE_NAME} from '../shared/DOMProperty';
 
 const ReactCurrentOwner = ReactSharedInternals.ReactCurrentOwner;
 
+// 一下变量仅在__DEV__模式下有用
 let topLevelUpdateWarnings;
 let warnOnInvalidCallback;
 let didWarnAboutUnstableCreatePortal = false;
 
 if (__DEV__) {
+  // react需要使用Map/Set, 低版本的浏览器需要polyfill
   if (
     typeof Map !== 'function' ||
     // $FlowIssue Flow incorrectly thinks Map has no prototype
@@ -105,6 +107,7 @@ if (__DEV__) {
 
   topLevelUpdateWarnings = (container: DOMContainer) => {
     if (container._reactRootContainer && container.nodeType !== COMMENT_NODE) {
+      // TODO: T: react-reconciler相关, 回来补充
       const hostInstance = findHostInstanceWithNoPortals(
         container._reactRootContainer._internalRoot.current,
       );
@@ -119,8 +122,11 @@ if (__DEV__) {
       }
     }
 
+    // 是否为reactRootContainer的标识
     const isRootRenderedBySomeReact = !!container._reactRootContainer;
+    // 获取container的DOM元素
     const rootEl = getReactRootElementInContainer(container);
+    // container存在且为React节点
     const hasNonRootReactChild = !!(rootEl && getInstanceFromNode(rootEl));
 
     warningWithoutStack(
@@ -154,8 +160,12 @@ if (__DEV__) {
   };
 }
 
+// TODO: T: 注入用于增强组件组件的实现方法, 赋予组件(input/select/option)状态? 受控/非受控
 setRestoreImplementation(restoreControlledState);
 
+// FLOW的联结类型, 声明DOMContainer为HTML element 或 document
+// '&'表示交叉类型, 意思是HTMLElement和document对象里面需要有_reactRootContainer和_reactHasBeenPassedToCreateRootDEV属性
+// FIXME: T:_reactRootContainer: 存储react根节点?, _reactHasBeenPassedToCreateRootDEV: 是否被用于创建跟节点?
 export type DOMContainer =
   | (Element & {
       _reactRootContainer: ?Root,
@@ -166,6 +176,7 @@ export type DOMContainer =
       _reactHasBeenPassedToCreateRootDEV: ?boolean,
     });
 
+// 定义Batch类型 - 多个FiberRoot
 type Batch = FiberRootBatch & {
   render(children: ReactNodeList): Work,
   then(onComplete: () => mixed): void,
@@ -182,6 +193,7 @@ type Batch = FiberRootBatch & {
   _didComplete: boolean,
 };
 
+// 定义Root类型
 type Root = {
   render(children: ReactNodeList, callback: ?() => mixed): Work,
   unmount(callback: ?() => mixed): Work,
@@ -195,7 +207,9 @@ type Root = {
   _internalRoot: FiberRoot,
 };
 
+// ReactBatch类, 一批Fiber
 function ReactBatch(root: ReactRoot) {
+  // TODO: T: react-reconciler代码, 待补充
   const expirationTime = computeUniqueAsyncExpiration();
   this._expirationTime = expirationTime;
   this._root = root;
@@ -244,6 +258,7 @@ ReactBatch.prototype.commit = function() {
     'batch.commit: Cannot commit a batch multiple times.',
   );
 
+  // 本批为空, 直接返回
   if (!this._hasChildren) {
     // This batch is empty. Return.
     this._next = null;
@@ -263,6 +278,7 @@ ReactBatch.prototype.commit = function() {
       // Rendering this batch again ensures its children will be the final state
       // when we flush (updates are processed in insertion order: last
       // update wins).
+      // TODO: T: 这里执行一次render是为了让子元素用的都是最终的state?
       // TODO: This forces a restart. Should we print a warning?
       this.render(this._children);
     }
@@ -295,6 +311,7 @@ ReactBatch.prototype.commit = function() {
   firstBatch = internalRoot.firstBatch = next;
 
   // Append the next earliest batch's children to the update queue.
+  // FIXME: T: 深度优先???
   if (firstBatch !== null && firstBatch._hasChildren) {
     firstBatch.render(firstBatch._children);
   }
@@ -322,11 +339,13 @@ type Work = {
   _didCommit: boolean,
 };
 
+// ReactWork类
 function ReactWork() {
   this._callbacks = null;
   this._didCommit = false;
   // TODO: Avoid need to bind by replacing callbacks in the update queue with
   // list of Work objects.
+  // FIXME: T: 这里为什么要bind, _onCommit是原型链的方法, 理论上原本onCommit的this就是Work的实例
   this._onCommit = this._onCommit.bind(this);
 }
 ReactWork.prototype.then = function(onCommit: () => mixed): void {
@@ -362,6 +381,7 @@ ReactWork.prototype._onCommit = function(): void {
   }
 };
 
+// ReactRoot类, 根Fiber节点
 function ReactRoot(
   container: DOMContainer,
   isConcurrent: boolean,
@@ -383,6 +403,7 @@ ReactRoot.prototype.render = function(
   if (callback !== null) {
     work.then(callback);
   }
+  // TODO: T: updateContainer干的什么事
   updateContainer(children, root, null, work._onCommit);
   return work;
 };
@@ -396,6 +417,7 @@ ReactRoot.prototype.unmount = function(callback: ?() => mixed): Work {
   if (callback !== null) {
     work.then(callback);
   }
+  // TODO: T: updateContainer干的什么事, 跟上面render的区别是: 入参1-element为空, unmount就是把element设为null?
   updateContainer(null, root, null, work._onCommit);
   return work;
 };
@@ -422,13 +444,20 @@ ReactRoot.prototype.createBatch = function(): Batch {
 
   const internalRoot = this._internalRoot;
   const firstBatch = internalRoot.firstBatch;
+  // 如果没有firstBatch, 也就是当前创建的是第一个ReactBatch
   if (firstBatch === null) {
     internalRoot.firstBatch = batch;
     batch._next = null;
   } else {
     // Insert sorted by expiration time then insertion order
+    // 以expiration time排序, 若expiration time相同则按插入的顺序
+    // insertAfter: 应当处于新创建的batch之前的batch
+    // insertBefore: 应当处于新创建的batch之后的batch
+    // 也就是: insertAfter -> batch -> insertBefore
     let insertAfter = null;
     let insertBefore = firstBatch;
+    // expirationTime从小到大排, 如果上一个batch的_expirationTime > 当前创建的batch的expirationTime
+    // 则当前创建的batch应该插入到上一个batch的前面
     while (
       insertBefore !== null &&
       insertBefore._expirationTime >= expirationTime
@@ -447,6 +476,8 @@ ReactRoot.prototype.createBatch = function(): Batch {
 
 /**
  * True if the supplied DOM node is a valid node element.
+ * 检查传入节点是否为合法的node节点
+ * 是HTML元素/document/document的fragment/值为' react-mount-point-unstable '的注释元素
  *
  * @param {?DOMElement} node The candidate DOM node.
  * @return {boolean} True if the DOM is a valid DOM node.
@@ -458,11 +489,14 @@ function isValidContainer(node) {
     (node.nodeType === ELEMENT_NODE ||
       node.nodeType === DOCUMENT_NODE ||
       node.nodeType === DOCUMENT_FRAGMENT_NODE ||
+      // 这么看, 值为' react-mount-point-unstable '的注释节点也能作为react的挂载点?
       (node.nodeType === COMMENT_NODE &&
         node.nodeValue === ' react-mount-point-unstable '))
   );
 }
 
+// 获取根元素的方法
+// 如果container是document直接返回document, 否则获取第一个子元素
 function getReactRootElementInContainer(container: any) {
   if (!container) {
     return null;
@@ -484,6 +518,7 @@ function shouldHydrateDueToLegacyHeuristic(container) {
   );
 }
 
+// TODO: T: setBatchingImplementation是干什么用的, 包括实参的3个方法干嘛用的
 setBatchingImplementation(
   batchedUpdates,
   interactiveUpdates,
@@ -551,6 +586,7 @@ function legacyRenderSubtreeIntoContainer(
   // TODO: Without `any` type, Flow says "Property cannot be accessed on any
   // member of intersection type." Whyyyyyy.
   let root: Root = (container._reactRootContainer: any);
+  // 没有根节点, 则当前节点因为根节点
   if (!root) {
     // Initial mount
     root = container._reactRootContainer = legacyCreateRootFromDOMContainer(
@@ -560,11 +596,13 @@ function legacyRenderSubtreeIntoContainer(
     if (typeof callback === 'function') {
       const originalCallback = callback;
       callback = function() {
+        // TODO: T: getPublicRootInstance干了什么
         const instance = getPublicRootInstance(root._internalRoot);
         originalCallback.call(instance);
       };
     }
     // Initial mount should not be batched.
+    // TODO: T: unbatchedUpdates干的啥, 初始化的挂载, 不能批量, unbatchedUpdates就是不批量挂载
     unbatchedUpdates(() => {
       if (parentComponent != null) {
         root.legacy_renderSubtreeIntoContainer(
@@ -577,6 +615,7 @@ function legacyRenderSubtreeIntoContainer(
       }
     });
   } else {
+    // 有根节点
     if (typeof callback === 'function') {
       const originalCallback = callback;
       callback = function() {

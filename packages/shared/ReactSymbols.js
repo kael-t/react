@@ -7,6 +7,7 @@
  * @flow
  */
 
+// 定义一些Symbol, 可以用Symbol.for(xxxx)来断定是否为React提供的相关元素
 // The Symbol used to tag the ReactElement-like types. If there is no native Symbol
 // nor polyfill, then a plain number is used for performance.
 const hasSymbol = typeof Symbol === 'function' && Symbol.for;
