@@ -191,7 +191,10 @@ export function updateContainerAtExpirationTime(
   return scheduleRootUpdate(current, element, expirationTime, callback);
 }
 
+// 获取hostFiber的实例, 也就是hostFiber对应的DOM
 function findHostInstance(component: Object): PublicInstance | null {
+  // 获取component(Element/ReactComponent实例对应的fiber下的_reactInternalFiber属性)
+  // TODO: T: _reactInternalFiber属性存的究竟是什么(是Fiber? 那就是从Fiber里面拿Fiber?)
   const fiber = getInstance(component);
   if (fiber === undefined) {
     if (typeof component.render === 'function') {

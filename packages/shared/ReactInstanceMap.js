@@ -24,6 +24,7 @@ export function remove(key) {
   key._reactInternalFiber = undefined;
 }
 
+// 获取
 export function get(key) {
   return key._reactInternalFiber;
 }

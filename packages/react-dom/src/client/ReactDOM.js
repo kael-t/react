@@ -647,12 +647,17 @@ function createPortal(
     'Target container is not a DOM element.',
   );
   // TODO: pass ReactDOM portal implementation as third argument
+  // TODO: T: createdPortalImpl作用?
   return createPortalImpl(children, container, null, key);
 }
 
+// 导出的ReactDom对象
 const ReactDOM: Object = {
+  // createProtal方法, 签名见上方定义
   createPortal,
 
+  // findDOMNode方法, 传入Element或者ReactComponent
+  // 找到Element和ReactComponent对应hostFiber的DOM
   findDOMNode(
     componentOrElement: Element | ?React$Component<any, any>,
   ): null | Element | Text {
