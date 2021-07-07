@@ -92,6 +92,7 @@ if (__DEV__) {
   didWarnAboutFindNodeInStrictMode = {};
 }
 
+// 获取Subtree的上下文, 其实就是获取父节点的上下文, 父节点的上下文就是子树的上下文
 function getContextForSubtree(
   parentComponent: ?React$Component<any, any>,
 ): Object {
@@ -103,6 +104,8 @@ function getContextForSubtree(
   const parentContext = findCurrentUnmaskedContext(fiber);
 
   if (fiber.tag === ClassComponent) {
+    // 如果父组件的是ContextProvider的实例
+    // 那么它的上下文就是父级的上下文+它自己的上下文
     const Component = fiber.type;
     if (isLegacyContextProvider(Component)) {
       return processChildContext(fiber, Component, parentContext);

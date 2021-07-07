@@ -37,6 +37,7 @@ function getWrappedName(
   );
 }
 
+// 获取组件的名称
 function getComponentName(type: mixed): string | null {
   if (type == null) {
     // Host root, text node or just invalid type.
@@ -51,12 +52,15 @@ function getComponentName(type: mixed): string | null {
       );
     }
   }
+  // function的话就是function/class component
   if (typeof type === 'function') {
     return type.displayName || type.name || null;
   }
+  // string的话为原生dom节点
   if (typeof type === 'string') {
     return type;
   }
+  // 一些内置的type
   switch (type) {
     case REACT_CONCURRENT_MODE_TYPE:
       return 'ConcurrentMode';

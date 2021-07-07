@@ -15,6 +15,7 @@ export type ReactNode =
   | ReactProvider<any>
   | ReactConsumer<any>;
 
+// null/undefined/布尔值都视为空的ReactNode
 export type ReactEmpty = null | void | boolean;
 
 export type ReactFragment = ReactEmpty | Iterable<React$Node>;

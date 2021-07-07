@@ -115,6 +115,9 @@ export function createFiberRoot(
   const uninitializedFiber = createHostRootFiber(isConcurrent);
 
   let root;
+  // 是否开启了enableSchedulerTracing对FiberRoot的区别是是否有
+  // interactionThreadID/memoizedInteractions/pendingInteractionMap这3个属性
+  // TODO: T: enableSchedulerTracing属性有啥用
   if (enableSchedulerTracing) {
     root = ({
       current: uninitializedFiber,

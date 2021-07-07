@@ -270,6 +270,7 @@ function invalidateContextProvider(
   }
 }
 
+// 获取当前fiber节点的上下文
 function findCurrentUnmaskedContext(fiber: Fiber): Object {
   // Currently this is only used with renderSubtreeIntoContainer; not sure if it
   // makes sense elsewhere
@@ -282,8 +283,10 @@ function findCurrentUnmaskedContext(fiber: Fiber): Object {
   let node = fiber;
   do {
     switch (node.tag) {
+      // 如果是渲染起点直接返回stateNode的上下文
       case HostRoot:
         return node.stateNode.context;
+      // 如果是ClassComponent, 且为ContextProvider, 返回ContextProvider的__reactInternalMemoizedMergedChildContext
       case ClassComponent: {
         const Component = node.type;
         if (isContextProvider(Component)) {
@@ -292,6 +295,7 @@ function findCurrentUnmaskedContext(fiber: Fiber): Object {
         break;
       }
     }
+    // 没找到当前节点的上下文的话则找父节点的上下文, 用父节点的上下文作为当前fiber的上下文
     node = node.return;
   } while (node !== null);
   invariant(

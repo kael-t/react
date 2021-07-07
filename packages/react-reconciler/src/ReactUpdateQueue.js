@@ -267,6 +267,7 @@ export function enqueueUpdate<State>(fiber: Fiber, update: Update<State>) {
     } else {
       // Both queues are non-empty. The last update is the same in both lists,
       // because of structural sharing. So, only append to one of the lists.
+      // FIXME: T: 两棵树是共享同一个updateQueue的?
       appendUpdateToQueue(queue1, update);
       // But we still need to update the `lastUpdate` pointer of queue2.
       queue2.lastUpdate = update;
